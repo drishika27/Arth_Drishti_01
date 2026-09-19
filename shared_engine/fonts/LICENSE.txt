@@ -1,0 +1,8 @@
+NotoSansDevanagari-Regular.ttf — Noto Sans Devanagari, Copyright 2012
+Google Inc. Licensed under the SIL Open Font License, Version 1.1
+(https://openfontlicense.org). Freely usable and redistributable,
+including in this repository, per that license.
+
+Downloaded 2026-09-14 from:
+https://raw.githubusercontent.com/openmaptiles/fonts/master/noto-sans/NotoSansDevanagari-Regular.ttf
+(a mirror of Google's official Noto Sans Devanagari release).

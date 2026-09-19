@@ -1,0 +1,37 @@
+version: "3.8"
+
+# Local Neo4j instance for Arth Raksha's wallet approval/connection graph
+# (arth_raksha/backend/graph.py). Run:
+#   docker compose -f docker-compose.neo4j.yml up -d
+#   export NEO4J_PASSWORD=arthdrishti_dev_password   # matches below
+#
+# Browser UI at http://localhost:7474 (user: neo4j, password: below).
+# Bolt (used by the app and by cypher-shell) at bolt://localhost:7687.
+#
+# This project's own tests/dev were run against a real, local, non-Docker
+# Neo4j Community 5.24 server instead (no Docker daemon was available in
+# that environment) — see README's Neo4j section for how that was set up
+# and verified. This compose file is the documented, standard path for
+# anyone who does have Docker.
+services:
+  neo4j:
+    image: neo4j:5.24-community
+    container_name: arthdrishti-neo4j
+    ports:
+      - "7474:7474"   # HTTP browser UI
+      - "7687:7687"   # Bolt protocol (what the app connects to)
+    environment:
+      NEO4J_AUTH: neo4j/arthdrishti_dev_password
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+    volumes:
+      - arthdrishti_neo4j_data:/data
+      - arthdrishti_neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD", "wget", "-O", "/dev/null", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  arthdrishti_neo4j_data:
+  arthdrishti_neo4j_logs:

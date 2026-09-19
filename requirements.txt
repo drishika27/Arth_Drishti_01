@@ -1,0 +1,16 @@
+fastapi==0.115.*
+uvicorn[standard]==0.32.*
+pydantic==2.*
+anthropic>=0.40
+python-multipart
+httpx
+web3>=6.20
+pytest
+pandas
+scikit-learn
+joblib
+neo4j
+pyjwt
+fpdf2
+pypdf
+pytest-cov
