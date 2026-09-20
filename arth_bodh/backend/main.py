@@ -39,8 +39,9 @@ from arth_core import config as core_config
 from arth_core.db import init_db
 from arth_core.api import (
     auth as account_api, expenses as expenses_api, receipts as receipts_api, insights as insights_api,
-    demo as demo_api,
+    demo as demo_api, crypto as crypto_api,
 )
+from arth_core import crypto as crypto_service
 from .parser import parse_statement_text, ParsedDocument
 from .rules import ALL_RULES
 
@@ -48,6 +49,8 @@ from .rules import ALL_RULES
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()   # creates any missing tables (SQLite locally, Postgres on Render)
+    import threading
+    threading.Thread(target=crypto_service.warm, daemon=True).start()   # pre-load token lists in the background
     yield
 
 
@@ -71,6 +74,7 @@ app.include_router(expenses_api.router)
 app.include_router(receipts_api.router)
 app.include_router(insights_api.router)
 app.include_router(demo_api.router)
+app.include_router(crypto_api.router)
 
 _AUTH = [Depends(require_auth)]
 

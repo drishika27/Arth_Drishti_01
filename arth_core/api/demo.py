@@ -42,9 +42,3 @@ def accounts(user: User = Depends(get_current_user), db: Session = Depends(get_d
     } for a, c in rows]
     known = [i["balance"] for i in items if i["balance"] is not None]
     return {"accounts": items, "total_balance": sum(known) if known else None}
-
-
-@router.get("/crypto/overview")
-def crypto_overview(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    data = demo.crypto_demo(db, user)
-    return data or {"connected": False}

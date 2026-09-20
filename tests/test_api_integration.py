@@ -7,6 +7,7 @@ and test_revoke_safety.py already cover.
 """
 from __future__ import annotations
 
+import copy
 import json
 
 from fastapi.testclient import TestClient
@@ -16,6 +17,7 @@ from arth_raksha.backend.main import app as raksha_app
 from arth_bodh.backend.main import app as bodh_app
 
 _FORBIDDEN_SUBSTRINGS = ("privatekey", "private_key", "signature", "mnemonic", "seedphrase", "seed_phrase")
+_WALLET_PROOF_PATHS = ("/auth/wallet/verify", "/crypto/wallets/link")
 
 
 def _auth_headers(client: TestClient) -> dict:
@@ -36,10 +38,21 @@ def test_no_request_body_field_anywhere_accepts_signing_material(monkeypatch):
     or seed phrase — enforced by scanning the real generated schema."""
     monkeypatch.delenv("ARTHDRISHTI_API_KEYS", raising=False)
     for app in (raksha_app, bodh_app):
-        schema = app.openapi()
+        schema = copy.deepcopy(app.openapi())
+        # The ONLY sanctioned exception: wallet sign-in / wallet-linking receive the user's signature over a
+        # plain-text ownership challenge (Sign-In-with-Ethereum style). That proves control of an address, can't
+        # move funds, and involves no private key. It is pinned to these exact paths and this exact body shape below.
+        for path in _WALLET_PROOF_PATHS:
+            schema["paths"].pop(path, None)
+        proof_body = schema.get("components", {}).get("schemas", {}).pop("VerifyRequest", None)
+        if proof_body is not None:
+            assert set(proof_body["properties"]) == {"address", "signature", "token"}
         schema_blob = json.dumps(schema).lower()
         for bad in ("privatekey", "private_key", "\"signature\"", "mnemonic", "seedphrase", "seed_phrase"):
             assert bad not in schema_blob, f"{app.title}: forbidden field-like term '{bad}' found in OpenAPI schema"
+        # Even on the exempt endpoints, keys and seed phrases are never accepted.
+        for bad in ("privatekey", "private_key", "mnemonic", "seedphrase", "seed_phrase"):
+            assert bad not in json.dumps(proof_body or {}).lower()
 
 
 def test_full_send_flow_via_http_never_exposes_signing_material(monkeypatch):

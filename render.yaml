@@ -32,6 +32,9 @@ services:
       # Optional: enables Claude vision OCR + worded AI answers. Works without it.
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Optional: free CoinGecko demo key — raises the price-data rate limit for crypto wallets.
+      - key: COINGECKO_API_KEY
+        sync: false
 
   - type: web
     name: arth-drishti-app

@@ -43,7 +43,10 @@ function Shell({ user, setUser, onLogout }) {
   const [dark, setDark] = useState(localStorage.getItem('arth-theme') === 'dark');
   const [modal, setModal] = useState(null);          // null | {expense?: row}
   const [search, setSearch] = useState('');
-  const [data, setData] = useState({ expenses: [], summary: null, accounts: null, crypto: null, demo: false, loading: true, error: null });
+  const [data, setData] = useState({ expenses: [], summary: null, accounts: null, demo: false, loading: true, error: null });
+  const [wallets, setWallets] = useState([]);
+  const [walletId, setWalletId] = useState(null);
+  const [crypto, setCrypto] = useState({ data: null, loading: true, error: null });
   const [demoBusy, setDemoBusy] = useState(false);
   const currency = user.currency || 'INR';
   const language = user.language || 'English';
@@ -52,16 +55,35 @@ function Shell({ user, setUser, onLogout }) {
 
   const reload = useCallback(async () => {
     try {
-      const [list, summary, accounts, crypto, demo] = await Promise.all([
-        api.get('/expenses?limit=500'), api.get('/expenses/summary'), api.get('/bank/accounts'),
-        api.get('/crypto/overview'), api.get('/demo/status'),
+      const [list, summary, accounts, demo] = await Promise.all([
+        api.get('/expenses?limit=500'), api.get('/expenses/summary'), api.get('/bank/accounts'), api.get('/demo/status'),
       ]);
-      setData({ expenses: list.items, summary, accounts, crypto: crypto.connected === false ? null : crypto, demo: demo.active, loading: false, error: null });
+      setData({ expenses: list.items, summary, accounts, demo: demo.active, loading: false, error: null });
     } catch (e) {
       setData((d) => ({ ...d, loading: false, error: e.message }));
     }
   }, []);
   useEffect(() => { reload(); }, [reload]);
+
+  // Crypto loads on its own (reading a blockchain can be slow) so it never blocks the rest of the app.
+  const loadWallets = useCallback(async () => {
+    try { setWallets((await api.get('/crypto/wallets')).wallets); } catch { /* shown via overview error */ }
+  }, []);
+  const loadCrypto = useCallback(async (refresh = false) => {
+    setCrypto((c) => ({ ...c, loading: true, error: null }));
+    try {
+      const q = new URLSearchParams();
+      if (walletId) q.set('wallet_id', walletId);
+      if (refresh) q.set('refresh', 'true');
+      const d = await api.get(`/crypto/overview?${q}`);
+      setCrypto({ data: d.connected === false ? null : d, loading: false, error: null });
+    } catch (e) {
+      setCrypto({ data: null, loading: false, error: e.message });
+      if (/not found/i.test(e.message)) setWalletId(null);
+    }
+  }, [walletId]);
+  useEffect(() => { loadWallets(); }, [loadWallets, data.demo]);
+  useEffect(() => { loadCrypto(); }, [loadCrypto, wallets.length, data.demo]);
 
   async function toggleDemo(load) {
     setDemoBusy(true);
@@ -78,7 +100,7 @@ function Shell({ user, setUser, onLogout }) {
 
   const title = nav.find((x) => x[0] === page)?.[1] || 'Overview';
   const shared = { summary: data.summary, accounts: data.accounts, loading: data.loading, error: data.error, reload, currency };
-  const cryptoProps = { crypto: data.crypto, loading: data.loading, currency };
+  const cryptoProps = { crypto: crypto.data, state: crypto, reload: () => loadCrypto(true), wallets, walletId, setWalletId, refreshWallets: loadWallets, currency };
   const emptyAccount = !data.loading && !data.demo && !data.expenses.length && !data.accounts?.accounts?.length;
   const initials = (user.name || user.email || '?').split(/[\s@]+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 
@@ -94,7 +116,7 @@ function Shell({ user, setUser, onLogout }) {
       <div className="content">
         {data.demo && <div className="notice">You're viewing <b>sample data</b> (synthetic expenses, bank accounts and crypto wallet) so you can explore the app. <button className="link" disabled={demoBusy} onClick={() => toggleDemo(false)}>{demoBusy ? 'Working…' : 'Clear sample data'}</button></div>}
         {emptyAccount && <div className="notice">Your account is empty. <button className="link" disabled={demoBusy} onClick={() => toggleDemo(true)}>{demoBusy ? 'Loading…' : 'Load sample data'}</button> to explore every page, or start adding your own.</div>}
-        {page === 'dashboard' && <Dashboard setPage={setPage} {...shared} crypto={data.crypto} security={data.crypto?.security} />}
+        {page === 'dashboard' && <Dashboard setPage={setPage} {...shared} crypto={crypto.data} security={crypto.data?.security && { risk_label: crypto.data.security.risk_label, approvals: crypto.data.security.approvals ?? 0 }} />}
         {page === 'funds' && <Funds {...shared} />}
         {page === 'expenses' && <Expenses expenses={data.expenses} loading={data.loading} error={data.error} reload={reload} search={search} setSearch={setSearch} onAdd={() => setModal({})} onEdit={(e) => setModal({ expense: e })} currency={currency} />}
         {page === 'ocr' && <OCR onSaved={reload} />}

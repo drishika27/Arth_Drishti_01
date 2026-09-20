@@ -72,6 +72,9 @@ def user_out(u: User) -> dict:
 
 @router.post("/auth/register", status_code=201)
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    if req.email.endswith("@wallet.local"):
+        # Reserved for wallet-only accounts; allowing it would let someone squat a wallet's account.
+        raise HTTPException(422, "That email domain is reserved.")
     if db.scalar(select(User).where(User.email == req.email)):
         raise HTTPException(409, "An account with this email already exists.")
     user = User(email=req.email, name=req.name.strip(), password_hash=hash_password(req.password))

@@ -132,7 +132,8 @@ def fx_rate(user: User = Depends(get_current_user)):
     if _fx_cache["usd_per_inr"] and time.time() - _fx_cache["at"] < 3600:
         return {"usd_per_inr": _fx_cache["usd_per_inr"]}
     try:
-        r = httpx.get("https://api.frankfurter.app/latest", params={"from": "INR", "to": "USD"}, timeout=8)
+        r = httpx.get("https://api.frankfurter.dev/v1/latest", params={"base": "INR", "symbols": "USD"},
+                      timeout=8, follow_redirects=True)
         r.raise_for_status()
         rate = float(r.json()["rates"]["USD"])
     except Exception:

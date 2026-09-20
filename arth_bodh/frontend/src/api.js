@@ -107,6 +107,15 @@ async function authenticate(path, body) {
   return data.user;
 }
 
+/** Sign in with a wallet: fetch a one-time challenge, have the user's wallet sign it, verify server-side. */
+export async function walletLogin(address, sign) {
+  const res = await rawFetch("/auth/wallet/nonce", jsonInit("POST", { address, domain: window.location.host }));
+  if (!res.ok) throw await toError(res);
+  const challenge = await res.json();
+  const signature = await sign(challenge.message);
+  return authenticate("/auth/wallet/verify", { address, signature, token: challenge.token });
+}
+
 export const login = (email, password) => authenticate("/auth/login", { email, password });
 export const register = (email, password, name) => authenticate("/auth/register", { email, password, name });
 export const logout = () => saveSession(null);
