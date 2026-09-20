@@ -43,8 +43,16 @@ _TOKEN_TTL_SECONDS = 3600
 # issues are only ever verified by that same process), but every real
 # deployment must set JWT_SECRET explicitly or tokens won't survive a
 # restart and can't be verified across multiple worker processes.
+def _is_production() -> bool:
+    return os.environ.get("ARTHDRISHTI_ENV", "development").lower() == "production"
+
+
 _SECRET = os.environ.get("JWT_SECRET")
 if not _SECRET:
+    if _is_production():
+        # A per-process random secret would silently break every login on
+        # restart / across workers; refuse to start instead of limping.
+        raise RuntimeError("JWT_SECRET must be set when ARTHDRISHTI_ENV=production.")
     import secrets
     _SECRET = secrets.token_hex(32)
     logger.warning(
@@ -56,6 +64,9 @@ if not _SECRET:
 
 def _valid_api_keys() -> set[str]:
     raw = os.environ.get("ARTHDRISHTI_API_KEYS")
+    if not raw and _is_production():
+        # The well-known dev key is never accepted in production.
+        return set()
     if not raw:
         logger.warning(
             "ARTHDRISHTI_API_KEYS not set — falling back to a single well-known dev key "
@@ -81,6 +92,22 @@ def _decode(token: str) -> dict:
     return jwt.decode(token, _SECRET, algorithms=[_ALGORITHM])
 
 
+# Token "typ" values that must never be accepted as an access credential.
+_NON_ACCESS_TYPES = {"refresh", "wallet_challenge"}
+
+
+def encode_jwt(payload: dict, ttl_seconds: int) -> str:
+    """Sign a JWT with the shared secret. Used for user access/refresh
+    tokens and short-lived wallet-ownership challenges."""
+    now = int(time.time())
+    return jwt.encode({**payload, "iat": now, "exp": now + ttl_seconds}, _SECRET, algorithm=_ALGORITHM)
+
+
+def decode_jwt(token: str) -> dict:
+    """Verify signature + expiry. Raises jwt.InvalidTokenError subclasses."""
+    return _decode(token)
+
+
 _bearer_scheme = HTTPBearer(
     scheme_name="ArthDrishtiBearer",
     description="Obtain a token via POST /auth/token with a valid API key, then pass it here.",
@@ -93,8 +120,11 @@ async def require_auth(credentials: HTTPAuthorizationCredentials = Depends(_bear
     (and this module's own /auth/token) undecorated; everything else
     that touches real data should require it."""
     try:
-        return _decode(credentials.credentials)
+        payload = _decode(credentials.credentials)
     except jwt.ExpiredSignatureError:
         raise HTTPException(401, "Token expired — call /auth/token again.")
     except jwt.InvalidTokenError:
         raise HTTPException(401, "Invalid token.")
+    if payload.get("typ") in _NON_ACCESS_TYPES:
+        raise HTTPException(401, "Invalid token.")
+    return payload

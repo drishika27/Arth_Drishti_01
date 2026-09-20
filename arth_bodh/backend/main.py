@@ -29,25 +29,46 @@ from pydantic import BaseModel, Field
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
+from contextlib import asynccontextmanager
+
 from shared_engine import (
     ScoringEngine, GroundedExplainer, Language, Depth, issue_token, require_auth,
     ReportSection, render_markdown, render_pdf,
 )
+from arth_core import config as core_config
+from arth_core.db import init_db
+from arth_core.api import (
+    auth as account_api, expenses as expenses_api, receipts as receipts_api, insights as insights_api,
+)
 from .parser import parse_statement_text, ParsedDocument
 from .rules import ALL_RULES
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_db()   # creates any missing tables (SQLite locally, Postgres on Render)
+    yield
+
+
 app = FastAPI(
     title="Arth Bodh API",
-    version="0.2.0",
+    version="0.3.0",
+    lifespan=lifespan,
     description=(
-        "Explains a bank statement's fees and terms in plain language, grounded "
-        "only in the document's own evidence. Most endpoints require a bearer "
-        "token — call POST /auth/token first."
+        "ArthDrishti application API: accounts, expenses (manual + receipt OCR + "
+        "bank sync), crypto portfolio and AI insights, plus the original grounded "
+        "statement explainer. Sign in via POST /auth/login (or /auth/register); "
+        "POST /auth/token remains for API-key clients."
     ),
 )
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+    CORSMiddleware, allow_origins=core_config.cors_origins(),
+    allow_methods=["*"], allow_headers=["*"],
 )
+app.include_router(account_api.router)
+app.include_router(expenses_api.router)
+app.include_router(receipts_api.router)
+app.include_router(insights_api.router)
 
 _AUTH = [Depends(require_auth)]
 
@@ -159,50 +180,9 @@ def chat(req: ChatRequest):
 
 
 
-class SimpleChatRequest(BaseModel):
-    question: str
-
-class OCRRequest(BaseModel):
-    text: str = ""
-
-@app.post("/ai/chat", dependencies=_AUTH)
-def ai_chat(req: SimpleChatRequest):
-    q = req.question.lower()
-    if "largest" in q or "category" in q:
-        return {"answer": "From the demo expense data, Food and Groceries are among the largest recurring categories. You can open Analytics to inspect the exact local breakdown."}
-    if "cash" in q or "flow" in q:
-        return {"answer": "Your demo snapshot shows ₹97,000 income, ₹8,200 of recent tracked expenses, and ₹38,200 remaining planned budget. These are demo values until a bank connection is configured."}
-    if "spend" in q or "expense" in q:
-        return {"answer": "I can help review expenses, compare categories, and explain individual charges. For this demo, your recent activity is stored locally in the interface."}
-    return {"answer": "I can help with spending, budgets, cash flow, receipt review, and the Arth Raksha wallet demo. Ask me about one of those areas and I’ll keep the answer grounded in the available demo data."}
-
-@app.post("/ocr", dependencies=_AUTH)
-def ocr(req: OCRRequest):
-    text = req.text.lower()
-    amount = 540
-    import re
-    m = re.search(r"(?:₹|rs\.?\s*)?([0-9]{2,6}(?:\.[0-9]{1,2})?)", text)
-    if m:
-        amount = float(m.group(1))
-    merchant = "Cafe Coffee Day" if "cafe" in text or "coffee" in text else "Receipt merchant (review)"
-    category = "Food" if merchant != "Receipt merchant (review)" else "Other"
-    return {"merchant": merchant, "amount": amount, "date": "2026-09-19", "category": category, "note": "Mock OCR result — please review before saving."}
-
-@app.get("/dashboard", dependencies=_AUTH)
-def dashboard():
-    return {"available_funds": 84200, "monthly_income": 97000, "monthly_spend": 8200, "crypto_portfolio": 682940, "security": "Protected", "data_mode": "demo"}
-
-@app.get("/wallet", dependencies=_AUTH)
-def wallet():
-    return {"address": "0x8c21...77E2", "network": "Ethereum Mainnet", "watch_only": True, "data_mode": "mock-blockchain"}
-
-@app.get("/portfolio", dependencies=_AUTH)
-def portfolio():
-    return {"currency": "INR", "value": 682940, "change_24h": 4.2, "assets": [{"symbol":"ETH","amount":1.82,"price":291450},{"symbol":"USDC","amount":820,"price":83.5},{"symbol":"USDT","amount":510,"price":83.6}], "data_mode":"mock-blockchain"}
-
-@app.get("/security", dependencies=_AUTH)
-def security():
-    return {"risk":"Low", "approvals":3, "address_checks":"8 / 8", "seed_phrase_requested":False, "private_key_requested":False, "data_mode":"demo"}
+# NOTE: the earlier canned /ocr, /ai/chat, /dashboard, /wallet, /portfolio and
+# /security endpoints were replaced by real, per-user implementations in
+# arth_core (receipts, insights, expenses/summary).
 
 @app.get("/doc/{doc_id}/report", dependencies=_AUTH)
 def doc_report(doc_id: str, format: str = "markdown", language: Language = Language.ENGLISH):
