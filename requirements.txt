@@ -14,3 +14,8 @@ pyjwt
 fpdf2
 pypdf
 pytest-cov
+sqlalchemy>=2.0
+psycopg[binary]>=3.2
+cryptography
+pillow
+rapidocr-onnxruntime
