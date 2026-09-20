@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { login, register } from './api';
+import { api, login, register } from './api';
 
 export default function Auth({ onAuthed }) {
   const [mode, setMode] = useState('login');
@@ -16,6 +16,8 @@ export default function Auth({ onAuthed }) {
       const user = mode === 'login'
         ? await login(form.email, form.password)
         : await register(form.email, form.password, form.name);
+      // Local development only: new accounts start with labelled sample data so nothing looks empty.
+      if (mode === 'register' && import.meta.env.DEV) await api.post('/demo/seed').catch(() => {});
       onAuthed(user);
     } catch (err) {
       setError(err.message);

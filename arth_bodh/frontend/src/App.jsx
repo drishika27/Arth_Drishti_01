@@ -43,7 +43,8 @@ function Shell({ user, setUser, onLogout }) {
   const [dark, setDark] = useState(localStorage.getItem('arth-theme') === 'dark');
   const [modal, setModal] = useState(null);          // null | {expense?: row}
   const [search, setSearch] = useState('');
-  const [data, setData] = useState({ expenses: [], summary: null, loading: true, error: null });
+  const [data, setData] = useState({ expenses: [], summary: null, accounts: null, crypto: null, demo: false, loading: true, error: null });
+  const [demoBusy, setDemoBusy] = useState(false);
   const currency = user.currency || 'INR';
   const language = user.language || 'English';
 
@@ -51,13 +52,23 @@ function Shell({ user, setUser, onLogout }) {
 
   const reload = useCallback(async () => {
     try {
-      const [list, summary] = await Promise.all([api.get('/expenses?limit=500'), api.get('/expenses/summary')]);
-      setData({ expenses: list.items, summary, loading: false, error: null });
+      const [list, summary, accounts, crypto, demo] = await Promise.all([
+        api.get('/expenses?limit=500'), api.get('/expenses/summary'), api.get('/bank/accounts'),
+        api.get('/crypto/overview'), api.get('/demo/status'),
+      ]);
+      setData({ expenses: list.items, summary, accounts, crypto: crypto.connected === false ? null : crypto, demo: demo.active, loading: false, error: null });
     } catch (e) {
       setData((d) => ({ ...d, loading: false, error: e.message }));
     }
   }, []);
   useEffect(() => { reload(); }, [reload]);
+
+  async function toggleDemo(load) {
+    setDemoBusy(true);
+    try { await (load ? api.post('/demo/seed') : api.del('/demo')); await reload(); }
+    catch (e) { setData((d) => ({ ...d, error: e.message })); }
+    finally { setDemoBusy(false); }
+  }
 
   // Live INR->USD rate, only needed when the user prefers USD.
   useEffect(() => {
@@ -66,7 +77,9 @@ function Shell({ user, setUser, onLogout }) {
   }, [currency]);
 
   const title = nav.find((x) => x[0] === page)?.[1] || 'Overview';
-  const shared = { summary: data.summary, loading: data.loading, error: data.error, reload, currency };
+  const shared = { summary: data.summary, accounts: data.accounts, loading: data.loading, error: data.error, reload, currency };
+  const cryptoProps = { crypto: data.crypto, loading: data.loading, currency };
+  const emptyAccount = !data.loading && !data.demo && !data.expenses.length && !data.accounts?.accounts?.length;
   const initials = (user.name || user.email || '?').split(/[\s@]+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 
   return <div className="app-shell">
@@ -79,18 +92,20 @@ function Shell({ user, setUser, onLogout }) {
     <main className="main">
       <header className="topbar"><div><p className="eyebrow">{RAKSHA_PAGES.includes(page) ? 'ARTH RAKSHA' : 'ARTH BODH'}</p><h1>{language === 'हिंदी' && page === 'dashboard' ? 'आपका वित्तीय डैशबोर्ड' : title}</h1></div><div className="top-actions"><button className="icon-btn" onClick={() => setDark(!dark)}>{dark ? '☀' : '◐'}</button><button className="profile" onClick={() => setPage('settings')} title={user.email}>{initials}</button></div></header>
       <div className="content">
-        {page === 'dashboard' && <Dashboard setPage={setPage} {...shared} />}
+        {data.demo && <div className="notice">You're viewing <b>sample data</b> (synthetic expenses, bank accounts and crypto wallet) so you can explore the app. <button className="link" disabled={demoBusy} onClick={() => toggleDemo(false)}>{demoBusy ? 'Working…' : 'Clear sample data'}</button></div>}
+        {emptyAccount && <div className="notice">Your account is empty. <button className="link" disabled={demoBusy} onClick={() => toggleDemo(true)}>{demoBusy ? 'Loading…' : 'Load sample data'}</button> to explore every page, or start adding your own.</div>}
+        {page === 'dashboard' && <Dashboard setPage={setPage} {...shared} crypto={data.crypto} security={data.crypto?.security} />}
         {page === 'funds' && <Funds {...shared} />}
         {page === 'expenses' && <Expenses expenses={data.expenses} loading={data.loading} error={data.error} reload={reload} search={search} setSearch={setSearch} onAdd={() => setModal({})} onEdit={(e) => setModal({ expense: e })} currency={currency} />}
         {page === 'ocr' && <OCR onSaved={reload} />}
         {page === 'ai' && <AI language={language} />}
         {page === 'analytics' && <Analytics {...shared} />}
-        {page === 'wallet' && <Wallet />}
-        {page === 'assets' && <Assets />}
-        {page === 'transactions' && <Transactions />}
-        {page === 'portfolio' && <Portfolio />}
-        {page === 'security' && <Security />}
-        {page === 'settings' && <Settings user={user} setUser={setUser} dark={dark} setDark={setDark} onLogout={onLogout} />}
+        {page === 'wallet' && <Wallet {...cryptoProps} />}
+        {page === 'assets' && <Assets {...cryptoProps} />}
+        {page === 'transactions' && <Transactions {...cryptoProps} />}
+        {page === 'portfolio' && <Portfolio {...cryptoProps} />}
+        {page === 'security' && <Security {...cryptoProps} />}
+        {page === 'settings' && <Settings user={user} setUser={setUser} dark={dark} setDark={setDark} onLogout={onLogout} demo={data.demo} demoBusy={demoBusy} toggleDemo={toggleDemo} />}
       </div>
     </main>
     {modal && <ExpenseModal expense={modal.expense} onClose={() => setModal(null)} onSaved={() => { setModal(null); reload(); }} />}

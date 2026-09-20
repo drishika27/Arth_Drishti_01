@@ -39,6 +39,7 @@ from arth_core import config as core_config
 from arth_core.db import init_db
 from arth_core.api import (
     auth as account_api, expenses as expenses_api, receipts as receipts_api, insights as insights_api,
+    demo as demo_api,
 )
 from .parser import parse_statement_text, ParsedDocument
 from .rules import ALL_RULES
@@ -69,6 +70,7 @@ app.include_router(account_api.router)
 app.include_router(expenses_api.router)
 app.include_router(receipts_api.router)
 app.include_router(insights_api.router)
+app.include_router(demo_api.router)
 
 _AUTH = [Depends(require_auth)]
 

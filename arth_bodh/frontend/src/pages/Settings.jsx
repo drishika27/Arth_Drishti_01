@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api, updateStoredUser } from '../api';
 import { Card, Pill, ErrorNote } from '../ui';
 
-export default function Settings({ user, setUser, dark, setDark, onLogout }) {
+export default function Settings({ user, setUser, dark, setDark, onLogout, demo, demoBusy, toggleDemo }) {
   const [budget, setBudget] = useState(user.monthly_budget ?? '');
   const [name, setName] = useState(user.name || '');
   const [msg, setMsg] = useState('');
@@ -26,6 +26,7 @@ export default function Settings({ user, setUser, dark, setDark, onLogout }) {
         <div className="inline-form"><input type="number" min="0" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="e.g. 38000" /><button className="secondary" onClick={() => save({ monthly_budget: Number(budget) || 0 })}>Save</button></div></div>
       <div className="settings-row"><div><strong>Name</strong><small>{user.email}</small></div>
         <div className="inline-form"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} /><button className="secondary" onClick={() => save({ name })}>Save</button></div></div>
+      <div className="settings-row"><div><strong>Sample data</strong><small>Synthetic expenses, bank accounts and crypto wallet for exploring the app. Clearing it never touches your own entries.</small></div><button className="secondary" disabled={demoBusy} onClick={() => toggleDemo(!demo)}>{demo ? 'Clear sample data' : 'Load sample data'}</button></div>
       <div className="settings-row"><div><strong>Sign out</strong><small>End this session on this device</small></div><button className="secondary" onClick={onLogout}>Sign out</button></div>
     </Card>
     {msg && <div className="notice">{msg}</div>}
