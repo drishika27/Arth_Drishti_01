@@ -31,8 +31,9 @@ def cors_origins() -> list[str]:
     raw = os.environ.get("CORS_ALLOW_ORIGINS", "").strip()
     if raw:
         return [o.strip() for o in raw.split(",") if o.strip()]
-    # Wide open only for local development; production must list its origins.
-    return [] if is_production() else ["*"]
+    # Wide open only for local development. In production, default to this project's own deployed
+    # app (an exact-origin allowlist, never "*"); set CORS_ALLOW_ORIGINS to use a different site.
+    return ["https://arth-drishti-app.onrender.com"] if is_production() else ["*"]
 
 
 def anthropic_model() -> str:

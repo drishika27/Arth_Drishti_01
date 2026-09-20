@@ -2,7 +2,11 @@
 // Handles user sessions (access + refresh tokens), attaches the bearer token,
 // refreshes it once on a 401, and turns every failure into a readable ApiError.
 // No API keys live in the frontend bundle — users sign in with an account.
-export const API = import.meta.env.VITE_ARTH_BODH_API || "http://localhost:8001";
+// Local dev talks to the local backend; anywhere else (the deployed site) defaults to the production API.
+// VITE_ARTH_BODH_API overrides both, e.g. for a differently-named deployment.
+const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+export const API = import.meta.env.VITE_ARTH_BODH_API
+  || (isLocal ? "http://localhost:8001" : "https://arth-drishti-api.onrender.com");
 
 const STORAGE_KEY = "arth-session";
 

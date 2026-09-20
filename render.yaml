@@ -26,9 +26,9 @@ services:
         fromDatabase:
           name: arth-drishti-db
           property: connectionString
-      # Set to the web app's URL after the first deploy, e.g. https://arth-drishti-app.onrender.com
+      # The web app's URL (the only site allowed to call this API from a browser).
       - key: CORS_ALLOW_ORIGINS
-        sync: false
+        value: https://arth-drishti-app.onrender.com
       # Optional: enables Claude vision OCR + worded AI answers. Works without it.
       - key: ANTHROPIC_API_KEY
         sync: false
@@ -43,9 +43,9 @@ services:
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     envVars:
-      # Set to the API's URL, e.g. https://arth-drishti-api.onrender.com  (then redeploy the app)
+      # The API's URL, baked into the app at build time.
       - key: VITE_ARTH_BODH_API
-        sync: false
+        value: https://arth-drishti-api.onrender.com
     routes:
       - type: rewrite
         source: /*
