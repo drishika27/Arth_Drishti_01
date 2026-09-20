@@ -24,24 +24,26 @@ export const hasSession = () => !!session?.access_token;
 export const getStoredUser = () => session?.user || null;
 
 export class ApiError extends Error {
-  constructor(message, status = 0, retryable = false) {
+  constructor(message, status = 0, retryable = false, code = null) {
     super(message);
     this.status = status;
     this.retryable = retryable;
+    this.code = code;
   }
 }
 
 async function toError(res) {
   let message = `Request failed (${res.status})`;
   let retryable = res.status >= 500;
+  let code = null;
   try {
     const body = await res.json();
     const d = body.detail;
     if (typeof d === "string") message = d;
     else if (Array.isArray(d)) message = d.map((x) => x.msg?.replace(/^Value error, /, "")).filter(Boolean).join("; ") || message;
-    else if (d && typeof d === "object") { message = d.message || message; retryable = d.retryable ?? retryable; }
+    else if (d && typeof d === "object") { message = d.message || message; retryable = d.retryable ?? retryable; code = d.code ?? null; }
   } catch { /* non-JSON error body */ }
-  return new ApiError(message, res.status, retryable);
+  return new ApiError(message, res.status, retryable, code);
 }
 
 async function rawFetch(path, options) {

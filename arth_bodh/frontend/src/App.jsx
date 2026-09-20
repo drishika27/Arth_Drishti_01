@@ -26,6 +26,8 @@ const nav = [
   ['settings', 'Settings', '⚙'],
 ];
 const RAKSHA_PAGES = ['wallet', 'assets', 'transactions', 'portfolio', 'security'];
+// Phone layout: four everyday tabs in one slim bar, everything else in the "More" sheet.
+const MOBILE_TABS = [['dashboard', 'Home'], ['expenses', 'Expenses'], ['ai', 'Ask AI'], ['wallet', 'Wallet']];
 
 export default function App() {
   const [user, setUser] = useState(hasSession() ? getStoredUser() : null);
@@ -48,6 +50,7 @@ function Shell({ user, setUser, onLogout }) {
   const [walletId, setWalletId] = useState(null);
   const [crypto, setCrypto] = useState({ data: null, loading: true, error: null });
   const [demoBusy, setDemoBusy] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const currency = user.currency || 'INR';
   const language = user.language || 'English';
 
@@ -55,10 +58,11 @@ function Shell({ user, setUser, onLogout }) {
 
   const reload = useCallback(async () => {
     try {
-      const [list, summary, accounts, demo] = await Promise.all([
-        api.get('/expenses?limit=500'), api.get('/expenses/summary'), api.get('/bank/accounts'), api.get('/demo/status'),
+      const [list, summary, accounts, connections, demo] = await Promise.all([
+        api.get('/expenses?limit=500'), api.get('/expenses/summary'), api.get('/bank/accounts'),
+        api.get('/bank/connections'), api.get('/demo/status'),
       ]);
-      setData({ expenses: list.items, summary, accounts, demo: demo.active, loading: false, error: null });
+      setData({ expenses: list.items, summary, accounts, connections, demo: demo.active, loading: false, error: null });
     } catch (e) {
       setData((d) => ({ ...d, loading: false, error: e.message }));
     }
@@ -99,7 +103,7 @@ function Shell({ user, setUser, onLogout }) {
   }, [currency]);
 
   const title = nav.find((x) => x[0] === page)?.[1] || 'Overview';
-  const shared = { summary: data.summary, accounts: data.accounts, loading: data.loading, error: data.error, reload, currency };
+  const shared = { summary: data.summary, accounts: data.accounts, connections: data.connections, loading: data.loading, error: data.error, reload, currency };
   const cryptoProps = { crypto: crypto.data, state: crypto, reload: () => loadCrypto(true), wallets, walletId, setWalletId, refreshWallets: loadWallets, currency };
   const emptyAccount = !data.loading && !data.demo && !data.expenses.length && !data.accounts?.accounts?.length;
   const initials = (user.name || user.email || '?').split(/[\s@]+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
@@ -131,5 +135,22 @@ function Shell({ user, setUser, onLogout }) {
       </div>
     </main>
     {modal && <ExpenseModal expense={modal.expense} onClose={() => setModal(null)} onSaved={() => { setModal(null); reload(); }} />}
+
+    <nav className="mobile-nav" aria-label="Main">
+      {MOBILE_TABS.map(([id, label]) => {
+        const icon = nav.find((x) => x[0] === id)[2];
+        return <button key={id} className={page === id ? 'mnav active' : 'mnav'} onClick={() => { setPage(id); window.scrollTo(0, 0); }}><b>{icon}</b>{label}</button>;
+      })}
+      <button className={!MOBILE_TABS.some(([id]) => id === page) ? 'mnav active' : 'mnav'} onClick={() => setMoreOpen(true)}><b>☰</b>More</button>
+    </nav>
+    {moreOpen && <div className="more-backdrop" onClick={() => setMoreOpen(false)}>
+      <div className="more-sheet" role="dialog" aria-label="All sections" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head"><h2>Menu</h2><button type="button" onClick={() => setMoreOpen(false)} aria-label="Close menu">×</button></div>
+        {[['ARTH BODH', nav.slice(0, 6)], ['ARTH RAKSHA', nav.slice(6, 11)], ['ACCOUNT', nav.slice(11)]].map(([group, items]) => <div key={group}>
+          <small className="more-group">{group}</small>
+          <div className="more-grid">{items.map(([id, label, icon]) => <button key={id} className={page === id ? 'more-item active' : 'more-item'} onClick={() => { setPage(id); setMoreOpen(false); window.scrollTo(0, 0); }}><b>{icon}</b>{label}</button>)}</div>
+        </div>)}
+      </div>
+    </div>}
   </div>;
 }

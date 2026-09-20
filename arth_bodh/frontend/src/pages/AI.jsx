@@ -24,20 +24,27 @@ export default function AI({ language }) {
   const recognition = useRef(null);
   const heard = useRef('');           // final transcript for the current session (state is stale inside callbacks)
   const failed = useRef(false);
+  const context = useRef(null);       // the server's memory of the last question, so "and last month?" works
+  const pending = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const windowRef = useRef(null);
 
   useEffect(() => () => recognition.current?.abort?.(), []);   // stop the mic if the page is left
+  useEffect(() => { windowRef.current?.scrollTo({ top: windowRef.current.scrollHeight, behavior: 'smooth' }); }, [chat]);
 
   async function ask(text = question) {
     const q = (text || '').trim();
-    if (!q) return;
+    if (!q || pending.current) return;
+    pending.current = true; setBusy(true);
     setQuestion('');
     setChat((c) => [...c, { role: 'user', text: q }, { role: 'assistant', text: 'Thinking…', pending: true }]);
     try {
-      const d = await api.post('/ai/chat', { question: q });
+      const d = await api.post('/ai/chat', { question: q, context: context.current });
+      context.current = d.context || null;
       setChat((c) => [...c.slice(0, -1), { role: 'assistant', text: d.answer }]);
     } catch (e) {
-      setChat((c) => [...c.slice(0, -1), { role: 'assistant', text: `I couldn't answer that: ${e.message}` }]);
-    }
+      setChat((c) => [...c.slice(0, -1), { role: 'assistant', text: `I couldn't answer that: ${e.message} Please try again.` }]);
+    } finally { pending.current = false; setBusy(false); }
   }
 
   async function startVoice() {
@@ -103,16 +110,16 @@ export default function AI({ language }) {
   return <>
     <div className="section-intro"><Pill tone="purple">Arth AI</Pill><h2>A calmer way to ask about money.</h2><p>Ask about your spending patterns, explain a transaction, or tap the mic and just say it.</p></div>
     <Card className="chat-card">
-      <div className="suggestions">{['Why did I spend more this month?', 'What is my largest category?', 'Summarize my cash flow', 'Any unusual transactions?'].map((x) => <button key={x} onClick={() => ask(x)}>{x}</button>)}</div>
-      <div className="chat-window">{chat.map((m, i) => <div key={i} className={`bubble ${m.role}`}>{m.text}</div>)}</div>
+      <div className="suggestions">{['How much did I spend on food this month?', 'What is my largest category?', 'Why did I spend more this month?', 'Any unusual transactions?', 'What is my bank balance?', 'How is my crypto doing?', 'How can I save money?'].map((x) => <button key={x} disabled={busy} onClick={() => ask(x)}>{x}</button>)}</div>
+      <div className="chat-window" ref={windowRef}>{chat.map((m, i) => <div key={i} className={`bubble ${m.role}`}>{m.text}</div>)}</div>
       <form className="chat-input" onSubmit={(e) => { e.preventDefault(); ask(); }}>
-        <input value={question} onChange={(e) => setQuestion(e.target.value)} placeholder={listening ? 'Listening…' : 'Ask Arth AI…'} />
+        <input value={question} onChange={(e) => setQuestion(e.target.value)} placeholder={listening ? 'Listening…' : 'Ask about your spending, balance or crypto…'} maxLength={1000} />
         <button type="button" className={listening ? 'voice active' : 'voice'} onClick={listening ? stopVoice : startVoice} title={listening ? 'Stop and send' : 'Speak your question'} aria-label={listening ? 'Stop listening' : 'Start voice input'}>{listening ? '■' : '●'}</button>
-        <button className="primary">Send</button>
+        <button className="primary" disabled={busy || !question.trim()}>{busy ? '…' : 'Send'}</button>
       </form>
       {listening && <div className="notice">Listening… speak now, then tap ■ (or just pause) to send.</div>}
       {voiceError && <div className="notice error">{voiceError}</div>}
-      <div className="voice-review"><label>Voice transcription</label><textarea value={transcript} onChange={(e) => setTranscript(e.target.value)} placeholder="What you say appears here…" /><button className="secondary" disabled={!transcript.trim()} onClick={() => ask(transcript)}>Send transcription again</button></div>
+      <div className="voice-review"><label>Voice transcription</label><textarea value={transcript} onChange={(e) => setTranscript(e.target.value)} placeholder="What you say appears here…" /><button className="secondary" disabled={busy || !transcript.trim()} onClick={() => ask(transcript)}>Send transcription again</button></div>
     </Card>
   </>;
 }

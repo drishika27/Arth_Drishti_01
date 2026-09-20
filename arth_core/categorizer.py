@@ -64,7 +64,7 @@ _COMPILED = [(re.compile(p, re.I), name, cat) for p, name, cat in _KEYWORDS]
 
 # Noise that bank narrations wrap around the merchant name.
 _PREFIX_RE = re.compile(r"^(upi|pos|neft|imps|rtgs|ach|ecs|nach|atm|card|purchase|debit|payment to|paid to)\b[\s/\-:*]*", re.I)
-_TOKEN_NOISE_RE = re.compile(r"^(?:\d+|[a-z]*\d[a-z\d]*|ref|txn|no|xx+|\*+)$", re.I)
+_TOKEN_NOISE_RE = re.compile(r"^(?:\d+|[a-z]*\d[a-z\d]*|ref|txn|no|xx+|\*+|cr\.?|dr\.?|credit|debit)$", re.I)
 
 
 def normalize_merchant(raw: str) -> str:

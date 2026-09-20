@@ -93,7 +93,7 @@ def _decode(token: str) -> dict:
 
 
 # Token "typ" values that must never be accepted as an access credential.
-_NON_ACCESS_TYPES = {"refresh", "wallet_challenge"}
+_NON_ACCESS_TYPES = {"refresh", "wallet_challenge", "bank_consent"}
 
 
 def encode_jwt(payload: dict, ttl_seconds: int) -> str:

@@ -19,3 +19,4 @@ psycopg[binary]>=3.2
 cryptography
 pillow
 rapidocr-onnxruntime
+openpyxl

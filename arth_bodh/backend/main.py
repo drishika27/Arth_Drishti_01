@@ -39,8 +39,9 @@ from arth_core import config as core_config
 from arth_core.db import init_db
 from arth_core.api import (
     auth as account_api, expenses as expenses_api, receipts as receipts_api, insights as insights_api,
-    demo as demo_api, crypto as crypto_api,
+    demo as demo_api, crypto as crypto_api, bank as bank_api,
 )
+from arth_core.bank import sync as bank_sync_service
 from arth_core import crypto as crypto_service
 from .parser import parse_statement_text, ParsedDocument
 from .rules import ALL_RULES
@@ -51,7 +52,12 @@ async def lifespan(_app: FastAPI):
     init_db()   # creates any missing tables (SQLite locally, Postgres on Render)
     import threading
     threading.Thread(target=crypto_service.warm, daemon=True).start()   # pre-load token lists in the background
-    yield
+    import asyncio
+    sync_task = asyncio.create_task(bank_sync_service.sync_loop())      # automatic bank transaction sync
+    try:
+        yield
+    finally:
+        sync_task.cancel()
 
 
 app = FastAPI(
@@ -75,6 +81,7 @@ app.include_router(receipts_api.router)
 app.include_router(insights_api.router)
 app.include_router(demo_api.router)
 app.include_router(crypto_api.router)
+app.include_router(bank_api.router)
 
 _AUTH = [Depends(require_auth)]
 
